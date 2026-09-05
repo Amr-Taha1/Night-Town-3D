@@ -17,16 +17,6 @@
 
     <!-- Stylesheet -->
     <link rel="stylesheet" href="./style.css" />
-
-    <!-- Three.js CDN fallback & native importmap -->
-    <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js"
-      }
-    }
-    </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   </head>
   <body>
     <!-- 3D Canvas Container -->
@@ -141,6 +131,38 @@
               <span id="audio-icon">🔊</span>
               <span id="audio-status">الصوت: مشغل</span>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- On-Screen Mobile Touch Controls (shown on touch/mobile) -->
+      <div id="mobile-controls">
+        <div id="touch-dpad">
+          <button type="button" class="touch-btn" id="touch-up" aria-label="تحرك للأمام">▲</button>
+          <div class="touch-dpad-row">
+            <button type="button" class="touch-btn" id="touch-left" aria-label="تحرك لليسار">◀</button>
+            <button type="button" class="touch-btn" id="touch-down" aria-label="تحرك للخلف">▼</button>
+            <button type="button" class="touch-btn" id="touch-right" aria-label="تحرك لليمين">▶</button>
+          </div>
+        </div>
+        <div id="touch-actions">
+          <button type="button" class="touch-action-btn" id="touch-interact">
+            <span>🔑</span>
+            <span>تفاعل [E]</span>
+          </button>
+          <div class="touch-actions-sub">
+            <button type="button" class="touch-action-btn" id="touch-sprint">
+              <span>⚡</span>
+              <span>ركض</span>
+            </button>
+            <button type="button" class="touch-action-btn" id="touch-jump">
+              <span>⬆️</span>
+              <span>قفز</span>
+            </button>
+            <button type="button" class="touch-action-btn" id="touch-light">
+              <span>🔦</span>
+              <span>كشاف</span>
+            </button>
           </div>
         </div>
       </div>

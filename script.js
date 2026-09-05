@@ -688,7 +688,17 @@ class WorldBuilder {
     bowl.position.set(x, 3.8, z);
     this.scene.add(bowl);
 
+    // Front display pedestal for Key 2 facing approaching player from south
+    const altarGeo = new THREE.BoxGeometry(1.0, 1.1, 1.0);
+    const altarMat = new THREE.MeshStandardMaterial({ color: 0x2e3848, roughness: 0.6 });
+    const altar = new THREE.Mesh(altarGeo, altarMat);
+    altar.position.set(x, 0.55, z + 2.5);
+    altar.castShadow = true;
+    altar.receiveShadow = true;
+    this.scene.add(altar);
+
     this.addCollider(x - 2.5, x + 2.5, z - 2.5, z + 2.5);
+    this.addCollider(x - 0.6, x + 0.6, z + 2.0, z + 3.1);
   }
 
   createStreetLamps() {
@@ -769,6 +779,7 @@ class WorldBuilder {
       [24, 0, 1.4, 1.4, 1.4],
       [25.5, 0, 1.4, 1.4, 1.4],
       [24.7, 1.4, 1.4, 1.4, 1.4],
+      [26.5, 0, -14.0, 1.2, 0.9, 1.2],
 
       // Near Exit Gate
       [-4.5, 0, -32, 1.2, 1.2, 1.2],
@@ -957,14 +968,14 @@ class WorldBuilder {
       {
         id: 2,
         name: 'مفتاح ساحة البلدة (Silver Key)',
-        pos: new THREE.Vector3(0, 2.2, -0.2),
+        pos: new THREE.Vector3(0, 1.45, 2.5),
         color: 0x38bdf8, // Cyan / Silver
         slotId: 'slot-2'
       },
       {
         id: 3,
         name: 'مفتاح حديقة الظلال (Gold Key)',
-        pos: new THREE.Vector3(26.5, 1.4, -14.0),
+        pos: new THREE.Vector3(26.5, 1.25, -14.0),
         color: 0x10b981, // Emerald / Gold
         slotId: 'slot-3'
       }
@@ -1114,6 +1125,21 @@ class WorldBuilder {
 
     animateGate();
   }
+
+  reset() {
+    if (this.gateDoors && this.gateDoors.length === 2) {
+      this.gateDoors[0].rotation.y = 0;
+      this.gateDoors[1].rotation.y = 0;
+    }
+    if (this.gateCollider && !this.colliders.includes(this.gateCollider)) {
+      this.colliders.push(this.gateCollider);
+    }
+    this.keys.forEach(k => {
+      k.collected = false;
+      k.group.visible = true;
+    });
+    this.updateKeyIndicators(0);
+  }
 }
 
 /* ============================================================================
@@ -1166,8 +1192,11 @@ class PlayerController {
     this.flashlight = null;
     this.createFlashlight();
 
-    // Event bindings
+    // Event bindings & controls
     this.isLocked = false;
+    this.isDragging = false;
+    this.lastPointerX = 0;
+    this.lastPointerY = 0;
     this.setupInputs();
   }
 
@@ -1193,15 +1222,38 @@ class PlayerController {
   }
 
   setupInputs() {
-    // Mouse movement with Pointer Lock
-    document.addEventListener('mousemove', (e) => {
-      if (!this.isLocked) return;
-      const sensitivity = 0.0022;
-      this.yaw -= e.movementX * sensitivity;
-      this.pitch -= e.movementY * sensitivity;
+    // Mouse / Touch Look with Pointer Lock or Drag Fallback
+    this.domElement.addEventListener('pointerdown', (e) => {
+      if (!this.isLocked) {
+        this.isDragging = true;
+        this.lastPointerX = e.clientX;
+        this.lastPointerY = e.clientY;
+      }
+    });
 
-      // Clamp pitch between -85° and +85°
-      this.pitch = Math.max(-Math.PI * 0.46, Math.min(Math.PI * 0.46, this.pitch));
+    window.addEventListener('pointermove', (e) => {
+      if (this.isLocked) {
+        const sensitivity = 0.0022;
+        this.yaw -= e.movementX * sensitivity;
+        this.pitch -= e.movementY * sensitivity;
+        this.pitch = Math.max(-Math.PI * 0.46, Math.min(Math.PI * 0.46, this.pitch));
+      } else if (this.isDragging) {
+        const dx = e.clientX - this.lastPointerX;
+        const dy = e.clientY - this.lastPointerY;
+        this.lastPointerX = e.clientX;
+        this.lastPointerY = e.clientY;
+        const dragSensitivity = 0.0035;
+        this.yaw -= dx * dragSensitivity;
+        this.pitch -= dy * dragSensitivity;
+        this.pitch = Math.max(-Math.PI * 0.46, Math.min(Math.PI * 0.46, this.pitch));
+      }
+    });
+
+    window.addEventListener('pointerup', () => {
+      this.isDragging = false;
+    });
+    window.addEventListener('pointercancel', () => {
+      this.isDragging = false;
     });
 
     // Keyboard inputs
@@ -1234,6 +1286,61 @@ class PlayerController {
         case 'ShiftLeft': case 'ShiftRight': this.keys.sprint = false; break;
       }
     });
+
+    this.setupMobileControls();
+  }
+
+  setupMobileControls() {
+    const bindTouchKey = (id, keyName) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      const start = (e) => {
+        e.preventDefault();
+        btn.classList.add('pressed');
+        this.keys[keyName] = true;
+      };
+      const end = (e) => {
+        e.preventDefault();
+        btn.classList.remove('pressed');
+        this.keys[keyName] = false;
+      };
+      btn.addEventListener('pointerdown', start);
+      btn.addEventListener('pointerup', end);
+      btn.addEventListener('pointercancel', end);
+      btn.addEventListener('pointerleave', end);
+    };
+
+    bindTouchKey('touch-up', 'forward');
+    bindTouchKey('touch-down', 'backward');
+    bindTouchKey('touch-left', 'left');
+    bindTouchKey('touch-right', 'right');
+    bindTouchKey('touch-sprint', 'sprint');
+
+    // Jump button
+    const jumpBtn = document.getElementById('touch-jump');
+    if (jumpBtn) {
+      jumpBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        jumpBtn.classList.add('pressed');
+        if (this.isGrounded) {
+          this.velocity.y = this.jumpForce;
+          this.isGrounded = false;
+          this.sound.playJump();
+        }
+      });
+      const endJump = () => jumpBtn.classList.remove('pressed');
+      jumpBtn.addEventListener('pointerup', endJump);
+      jumpBtn.addEventListener('pointercancel', endJump);
+    }
+
+    // Flashlight button
+    const lightBtn = document.getElementById('touch-light');
+    if (lightBtn) {
+      lightBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        this.toggleFlashlight();
+      });
+    }
   }
 
   update(delta) {
@@ -1350,6 +1457,18 @@ class PlayerController {
     this.yaw = 0;
     this.pitch = 0;
     this.stamina = 100;
+    this.isSprinting = false;
+    this.isGrounded = true;
+    this.bobTimer = 0;
+    this.isDragging = false;
+    this.keys = {
+      forward: false,
+      backward: false,
+      left: false,
+      right: false,
+      sprint: false,
+      jump: false
+    };
   }
 }
 
@@ -1555,13 +1674,17 @@ class NightWatcher {
   }
 
   hasLineOfSight(playerPos) {
-    // Simple 2D segment intersection check with building boxes
     const p1x = this.position.x;
     const p1z = this.position.z;
     const p2x = playerPos.x;
     const p2z = playerPos.z;
 
     for (const b of this.colliders) {
+      // Only substantial structures (buildings and boundary walls) block vision
+      const w = b.maxX - b.minX;
+      const d = b.maxZ - b.minZ;
+      if (w < 1.5 && d < 1.5) continue; // Skip street lamps, crates, small props
+
       if (this.lineIntersectsBox(p1x, p1z, p2x, p2z, b.minX, b.maxX, b.minZ, b.maxZ)) {
         return false;
       }
@@ -1569,12 +1692,35 @@ class NightWatcher {
     return true;
   }
 
-  lineIntersectsBox(x1, y1, x2, y2, minX, maxX, minY, maxY) {
-    // Quick bounding box check
-    if (Math.max(x1, x2) < minX || Math.min(x1, x2) > maxX || Math.max(y1, y2) < minY || Math.min(y1, y2) > maxY) {
-      return false;
+  lineIntersectsBox(x1, z1, x2, z2, minX, maxX, minZ, maxZ) {
+    let dx = x2 - x1;
+    let dz = z2 - z1;
+    let tmin = 0;
+    let tmax = 1;
+
+    if (Math.abs(dx) < 1e-6) {
+      if (x1 < minX || x1 > maxX) return false;
+    } else {
+      let t1 = (minX - x1) / dx;
+      let t2 = (maxX - x1) / dx;
+      if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+      tmin = Math.max(tmin, t1);
+      tmax = Math.min(tmax, t2);
+      if (tmin > tmax) return false;
     }
-    return true;
+
+    if (Math.abs(dz) < 1e-6) {
+      if (z1 < minZ || z1 > maxZ) return false;
+    } else {
+      let t1 = (minZ - z1) / dz;
+      let t2 = (maxZ - z1) / dz;
+      if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+      tmin = Math.max(tmin, t1);
+      tmax = Math.min(tmax, t2);
+      if (tmin > tmax) return false;
+    }
+
+    return tmin <= tmax && tmax >= 0 && tmin <= 1;
   }
 
   reset() {
@@ -1582,6 +1728,12 @@ class NightWatcher {
     this.currentWaypointIdx = 0;
     this.position.copy(this.waypoints[0]);
     this.hasAlerted = false;
+    this.loseTimer = 0;
+    if (this.eyeMat) this.eyeMat.color.setHex(0xf97316);
+    if (this.searchLight) {
+      this.searchLight.color.setHex(0xf97316);
+      this.searchLight.intensity = 2.0;
+    }
   }
 }
 
@@ -1726,23 +1878,55 @@ class NightTownGame {
     });
 
     // Pointer Lock Change
+    this.wasExplicitlyLocked = false;
     document.addEventListener('pointerlockchange', () => {
       const isLocked = document.pointerLockElement === this.renderer.domElement;
       this.player.isLocked = isLocked;
 
-      if (!isLocked && this.state === 'PLAYING') {
+      if (!isLocked && this.state === 'PLAYING' && this.wasExplicitlyLocked) {
         this.pauseGame();
       } else if (isLocked && this.state === 'PAUSED') {
         this.resumeGame();
       }
+
+      if (isLocked) {
+        this.wasExplicitlyLocked = true;
+      }
     });
 
-    // Click canvas to request pointer lock if in game
+    // Click canvas to interact or request pointer lock
     this.renderer.domElement.addEventListener('click', () => {
-      if (this.state === 'PLAYING' || this.state === 'PAUSED') {
+      if (this.state === 'PLAYING') {
+        const target = this.getAimTarget();
+        if (target) {
+          this.handleInteraction();
+          return;
+        }
+        this.requestPointerLock();
+      } else if (this.state === 'PAUSED') {
         this.requestPointerLock();
       }
     });
+
+    // Interaction prompt click to interact
+    if (this.interactionPrompt) {
+      this.interactionPrompt.addEventListener('click', () => {
+        if (this.state === 'PLAYING') {
+          this.handleInteraction();
+        }
+      });
+    }
+
+    // Mobile interact button
+    const touchInteract = document.getElementById('touch-interact');
+    if (touchInteract) {
+      touchInteract.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (this.state === 'PLAYING') {
+          this.handleInteraction();
+        }
+      });
+    }
 
     // Interaction Key 'E'
     window.addEventListener('keydown', (e) => {
@@ -1763,12 +1947,21 @@ class NightTownGame {
       e.stopPropagation();
       const muted = this.sound.toggleMute();
       this.audioIcon.textContent = muted ? '🔇' : '🔊';
-      this.audioStatus.textContent = muted ? 'الصوت: مكتوم' : 'الصوت: شغال';
+      this.audioStatus.textContent = muted ? 'الصوت: مكتوم' : 'الصوت: مشغل';
     });
   }
 
   requestPointerLock() {
-    this.renderer.domElement.requestPointerLock();
+    try {
+      const p = this.renderer.domElement.requestPointerLock();
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {
+          // Handled gracefully in iframe/mobile environments
+        });
+      }
+    } catch (err) {
+      // Ignore if iframe policy blocks pointer lock
+    }
   }
 
   startGame() {
@@ -1793,7 +1986,8 @@ class NightTownGame {
   gameOver(killerEnemy) {
     if (this.state === 'GAMEOVER') return;
     this.state = 'GAMEOVER';
-    document.exitPointerLock();
+    this.wasExplicitlyLocked = false;
+    try { document.exitPointerLock(); } catch (e) {}
 
     this.sound.playGameOver();
     this.dangerVignette.classList.remove('active');
@@ -1807,7 +2001,8 @@ class NightTownGame {
   victory() {
     if (this.state === 'VICTORY') return;
     this.state = 'VICTORY';
-    document.exitPointerLock();
+    this.wasExplicitlyLocked = false;
+    try { document.exitPointerLock(); } catch (e) {}
 
     this.sound.playVictory();
     this.dangerVignette.classList.remove('active');
@@ -1825,7 +2020,10 @@ class NightTownGame {
     this.startTime = performance.now();
     this.elapsedTime = 0;
 
-    // Reset player position and stats
+    // Reset world (gate doors rotation, gate collider, keys visibility, lock LEDs)
+    this.world.reset();
+
+    // Reset player position, keys, and stats
     this.player.reset(0, 1.7, 34);
 
     // Reset UI
@@ -1834,12 +2032,11 @@ class NightTownGame {
       const slot = document.getElementById(`slot-${i}`);
       if (slot) slot.classList.remove('collected');
     }
-
-    // Reset keys visibility
-    this.world.keys.forEach(k => {
-      k.collected = false;
-      k.group.visible = true;
-    });
+    const objectiveText = document.getElementById('objective-text');
+    if (objectiveText) {
+      objectiveText.textContent = 'استكشف الشوارع وابحث عن 3 مفاتيح لفتح البوابة الشمالية';
+    }
+    this.dangerVignette.classList.remove('active');
 
     // Reset enemies
     this.enemies.forEach(e => e.reset());
@@ -1854,31 +2051,44 @@ class NightTownGame {
     this.showToast('تمت إعادة اللعبة! حظاً موفقاً في الهروب.');
   }
 
+  collectKey(keyObj) {
+    if (!keyObj || keyObj.collected) return;
+    keyObj.collected = true;
+    keyObj.group.visible = false;
+    this.collectedKeys++;
+    this.sound.playKeyCollect();
+
+    // Update UI
+    this.keysCounter.textContent = `(${this.collectedKeys} / ${this.totalKeys})`;
+    const slot = document.getElementById(keyObj.slotId);
+    if (slot) slot.classList.add('collected');
+
+    this.world.updateKeyIndicators(this.collectedKeys);
+
+    if (this.collectedKeys >= this.totalKeys) {
+      this.showToast('🎉 عثرت على جميع المفاتيح! توجه فوراً إلى البوابة الشمالية للهروب!');
+      const objEl = document.getElementById('objective-text');
+      if (objEl) objEl.textContent = 'توجه إلى البوابة الشمالية وافتحها للهروب!';
+    } else {
+      this.showToast(`🔑 تم جمع ${keyObj.name}! (${this.collectedKeys}/${this.totalKeys})`);
+    }
+  }
+
   handleInteraction() {
     const target = this.getAimTarget();
-    if (!target) return;
+    if (!target) {
+      // Proximity assist: if within 2.2m of any uncollected key
+      const nearKey = this.world.keys.find(k => !k.collected && this.camera.position.distanceTo(k.position) < 2.2);
+      if (nearKey) {
+        this.collectKey(nearKey);
+      }
+      return;
+    }
 
     if (target.type === 'key') {
       const keyObj = this.world.keys.find(k => k.id === target.keyId);
-      if (keyObj && !keyObj.collected) {
-        keyObj.collected = true;
-        keyObj.group.visible = false;
-        this.collectedKeys++;
-        this.sound.playKeyCollect();
-
-        // Update UI
-        this.keysCounter.textContent = `(${this.collectedKeys} / ${this.totalKeys})`;
-        const slot = document.getElementById(keyObj.slotId);
-        if (slot) slot.classList.add('collected');
-
-        this.world.updateKeyIndicators(this.collectedKeys);
-
-        if (this.collectedKeys >= this.totalKeys) {
-          this.showToast('🎉 عثرت على جميع المفاتيح! توجه فوراً إلى البوابة الشمالية للهروب!');
-          document.getElementById('objective-text').textContent = 'توجه إلى البوابة الشمالية وافتحها للهروب!';
-        } else {
-          this.showToast(`🔑 تم جمع ${keyObj.name}! (${this.collectedKeys}/${this.totalKeys})`);
-        }
+      if (keyObj) {
+        this.collectKey(keyObj);
       }
     } else if (target.type === 'gate') {
       if (this.collectedKeys >= this.totalKeys) {
@@ -1906,12 +2116,11 @@ class NightTownGame {
     for (const k of this.world.keys) {
       if (!k.collected) {
         const dist = cameraPos.distanceTo(k.position);
-        if (dist <= 3.6) {
-          // Check if looking near key
+        if (dist <= 3.8) {
           const dirToKey = new THREE.Vector3().subVectors(k.position, cameraPos).normalize();
           const camDir = new THREE.Vector3();
           this.camera.getWorldDirection(camDir);
-          if (camDir.dot(dirToKey) > 0.88) {
+          if (camDir.dot(dirToKey) > 0.80 || dist <= 1.8) {
             return { type: 'key', keyId: k.id, promptText: `جمع ${k.name}` };
           }
         }
@@ -1921,11 +2130,11 @@ class NightTownGame {
     // Check Gate Terminal (at Z = -35)
     const gatePos = new THREE.Vector3(0, 2.0, -34.5);
     const distToGate = cameraPos.distanceTo(gatePos);
-    if (distToGate <= 5.0) {
+    if (distToGate <= 5.5) {
       const camDir = new THREE.Vector3();
       this.camera.getWorldDirection(camDir);
       const dirToGate = new THREE.Vector3().subVectors(gatePos, cameraPos).normalize();
-      if (camDir.dot(dirToGate) > 0.82) {
+      if (camDir.dot(dirToGate) > 0.78 || distToGate <= 3.0) {
         return {
           type: 'gate',
           promptText: this.collectedKeys >= this.totalKeys ? 'إضغط لفتح البوابة والهروب' : 'البوابة الرئيسية (مغلقة - تحتاج 3 مفاتيح)'
@@ -2017,13 +2226,18 @@ class NightTownGame {
       // 1. Update Player Physics & Camera
       this.player.update(delta);
 
-      // 2. Animate Keys (Hover & Bobbing)
+      // 2. Animate Keys (Hover & Bobbing) & Proximity Auto-Pickup
       const time = performance.now() * 0.002;
       this.world.keys.forEach((k, idx) => {
         if (!k.collected) {
           k.group.rotation.y += delta * 1.8;
           k.group.position.y = k.baseY + Math.sin(time + idx) * 0.15;
           k.light.intensity = 1.2 + Math.sin(time * 2 + idx) * 0.4;
+
+          // Proximity auto-pickup when walking right into the key
+          if (this.player.position.distanceTo(k.position) < 1.35) {
+            this.collectKey(k);
+          }
         }
       });
 
