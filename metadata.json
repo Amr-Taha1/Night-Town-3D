@@ -1,0 +1,6 @@
+{
+  "name": "Night Town 3D",
+  "description": "لعبة ثلاثية الأبعاد منظور أول (First-Person) داخل مدينة مهجورة ليلاً: استكشاف وجمع 3 مفاتيح وتفادي الأعداء والهروب.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

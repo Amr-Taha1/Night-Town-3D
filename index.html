@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Night Town 3D</title>
+    <meta name="description" content="لعبة ثلاثية الأبعاد منظور أول (First-Person) داخل مدينة مهجورة ليلاً: استكشاف وجمع 3 مفاتيح وتفادي الأعداء والهروب." />
+    <meta property="og:title" content="Night Town 3D" />
+    <meta property="og:description" content="لعبة ثلاثية الأبعاد منظور أول (First-Person) داخل مدينة مهجورة ليلاً: استكشاف وجمع 3 مفاتيح وتفادي الأعداء والهروب." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="./style.css" />
+
+    <!-- Three.js CDN fallback & native importmap -->
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js"
+      }
+    }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  </head>
+  <body>
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Danger Vignette Overlay (Red pulse when chased by enemy) -->
+    <div id="danger-vignette"></div>
+
+    <!-- HUD (Active during gameplay) -->
+    <div id="hud">
+      <!-- Top Bar -->
+      <div class="hud-top-bar">
+        <!-- Keys Tracker -->
+        <div class="hud-panel keys-card" id="keys-panel">
+          <div class="keys-header">
+            <span>المفاتيح المطلوبة</span>
+            <span id="keys-counter">(0 / 3)</span>
+          </div>
+          <div class="keys-slots">
+            <div class="key-slot" id="slot-1" title="مفتاح الزقاق الغربي">
+              <span>🔑</span>
+              <span class="slot-hint">الزقاق</span>
+            </div>
+            <div class="key-slot" id="slot-2" title="مفتاح ساحة البلدة">
+              <span>🔑</span>
+              <span class="slot-hint">الساحة</span>
+            </div>
+            <div class="key-slot" id="slot-3" title="مفتاح الحديقة">
+              <span>🔑</span>
+              <span class="slot-hint">الحديقة</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Objective Banner -->
+        <div class="objective-banner" id="objective-banner">
+          <div class="objective-pulse"></div>
+          <span id="objective-text">اجمع 3 مفاتيح واهرب من البوابة الشمالية</span>
+        </div>
+
+        <!-- Escape Timer -->
+        <div class="hud-panel timer-card">
+          <span class="timer-value" id="game-timer">00:00.0</span>
+          <span class="timer-label">⏱️ الوقت المنقضي</span>
+        </div>
+      </div>
+
+      <!-- Center Crosshair -->
+      <div class="crosshair" id="crosshair">
+        <div class="crosshair-circle"></div>
+        <div class="crosshair-dot"></div>
+      </div>
+
+      <!-- Interaction Prompt -->
+      <div id="interaction-prompt">
+        <span class="key-badge">E</span>
+        <span id="prompt-action-text">إضغط للتفاعل</span>
+      </div>
+
+      <!-- Notification Toast -->
+      <div id="hud-toast">تم جمع المفتاح بنجاح!</div>
+
+      <!-- Bottom Bar -->
+      <div class="hud-bottom-bar">
+        <!-- Vitals & Stamina Bar -->
+        <div class="stamina-container">
+          <div class="vital-row">
+            <div class="stamina-header">
+              <span>الحالة (Integrity)</span>
+              <span>100%</span>
+            </div>
+            <div class="stamina-bar-bg">
+              <div class="integrity-fill"></div>
+            </div>
+          </div>
+          <div class="vital-row">
+            <div class="stamina-header">
+              <span>طاقة الركض (Shift)</span>
+              <span id="stamina-val">100%</span>
+            </div>
+            <div class="stamina-bar-bg">
+              <div class="stamina-bar-fill" id="stamina-fill"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls Legend & Tools -->
+        <div style="display: flex; align-items: center; gap: 14px; pointer-events: auto;">
+          <!-- Controls Legend -->
+          <div class="hud-controls-legend" style="display: flex; gap: 10px; opacity: 0.6; font-size: 11px; align-items: center;">
+            <div style="display: flex; gap: 5px; align-items: center;">
+              <span style="border: 1px solid rgba(255,255,255,0.3); padding: 2px 5px; border-radius: 2px; font-family: var(--font-mono); font-size: 10px;">WASD</span>
+              <span style="font-size: 10px; color: #9ca3af; text-transform: uppercase;">تحرك</span>
+            </div>
+            <div style="display: flex; gap: 5px; align-items: center;">
+              <span style="border: 1px solid rgba(255,255,255,0.3); padding: 2px 5px; border-radius: 2px; font-family: var(--font-mono); font-size: 10px;">SHIFT</span>
+              <span style="font-size: 10px; color: #9ca3af; text-transform: uppercase;">ركض</span>
+            </div>
+            <div style="display: flex; gap: 5px; align-items: center;">
+              <span style="border: 1px solid rgba(255,255,255,0.3); padding: 2px 5px; border-radius: 2px; font-family: var(--font-mono); font-size: 10px;">SPACE</span>
+              <span style="font-size: 10px; color: #9ca3af; text-transform: uppercase;">قفز</span>
+            </div>
+          </div>
+
+          <!-- Tools / Status Badges -->
+          <div class="tools-group">
+            <div class="tool-badge active" id="badge-flashlight" title="اضغط F لتشغيل أو إطفاء الكشاف">
+              <span>🔦</span>
+              <span id="flashlight-status">كشاف [F]</span>
+            </div>
+            <div class="tool-badge" id="badge-audio" title="كتم أو تشغيل الصوت">
+              <span id="audio-icon">🔊</span>
+              <span id="audio-status">الصوت: مشغل</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- START SCREEN MODAL -->
+    <div class="game-overlay" id="start-screen">
+      <div class="modal-container" id="start-modal">
+        <div>
+          <h1 class="game-title">NIGHT TOWN <span>3D</span></h1>
+          <p class="game-subtitle" style="margin-top: 6px;">ليلة مظلمة في المدينة المهجورة</p>
+        </div>
+
+        <!-- Mission Goal -->
+        <div class="mission-box">
+          <div class="mission-item">
+            <span class="mission-icon">🎯</span>
+            <span><strong>الهدف:</strong> استكشف شوارع المدينة المهجورة، واعثر على <strong>3 مفاتيح مخفية</strong>.</span>
+          </div>
+          <div class="mission-item">
+            <span class="mission-icon">🚪</span>
+            <span>توجه إلى <strong>البوابة الرئيسية في نهاية الشارع</strong> واستخدم المفاتيح لفتحها والهروب.</span>
+          </div>
+          <div class="mission-item">
+            <span class="mission-icon">⚠️</span>
+            <span><strong>تحذير:</strong> كائنات مراقبة ليلية تتجول في الشوارع. إذا رأتك ستطاردك فوراً!</span>
+          </div>
+        </div>
+
+        <!-- Controls Guide -->
+        <div class="controls-grid">
+          <div class="control-item">
+            <span class="control-key">W A S D</span>
+            <span class="control-action">التحرك</span>
+          </div>
+          <div class="control-item">
+            <span class="control-key">الماوس</span>
+            <span class="control-action">النظر والدوران</span>
+          </div>
+          <div class="control-item">
+            <span class="control-key">SHIFT</span>
+            <span class="control-action">الجري السريع</span>
+          </div>
+          <div class="control-item">
+            <span class="control-key">SPACE</span>
+            <span class="control-action">القفز</span>
+          </div>
+          <div class="control-item">
+            <span class="control-key">E</span>
+            <span class="control-action">جمع وتفاعل</span>
+          </div>
+          <div class="control-item">
+            <span class="control-key">F</span>
+            <span class="control-action">تشغيل الكشاف</span>
+          </div>
+        </div>
+
+        <button class="btn-primary" id="btn-start-game">
+          <span>🚀</span>
+          <span>ابدأ الاستكشاف والهروب</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- GAME OVER SCREEN MODAL -->
+    <div class="game-overlay hidden" id="game-over-screen">
+      <div class="modal-container" id="game-over-modal" style="border-color: rgba(239, 68, 68, 0.4);">
+        <div class="danger-icon">💀</div>
+        <div>
+          <h2 class="game-title" style="color: var(--accent-rose);">تم الإمساك بك!</h2>
+          <p class="game-subtitle" style="margin-top: 8px;">
+            اكتشف الحارس الليلي موقعك وقضى على محاولتك للهروب.
+          </p>
+        </div>
+
+        <div class="mission-box" style="text-align: center;">
+          <p style="color: #cbd5e1; font-size: 14px;">
+            المفاتيح التي جمعتها: <span id="game-over-keys" style="color: var(--accent-orange); font-family: var(--font-mono); font-weight: bold;">0 / 3</span>
+          </p>
+          <p style="color: #94a3b8; font-size: 13px; margin-top: 6px;">
+            الوقت المنقضي: <span id="game-over-time" style="font-family: var(--font-mono); color: #ffffff; font-weight: bold;">00:00.0</span>
+          </p>
+        </div>
+
+        <button class="btn-primary btn-danger" id="btn-retry">
+          <span>🔄</span>
+          <span>إعادة المحاولة من جديد</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- VICTORY SCREEN MODAL -->
+    <div class="game-overlay hidden" id="victory-screen">
+      <div class="modal-container" id="victory-modal" style="border-color: rgba(16, 185, 129, 0.4);">
+        <div class="victory-icon">🏆</div>
+        <div>
+          <h2 class="game-title" style="color: var(--accent-emerald);">تم الهروب بنجاح!</h2>
+          <p class="game-subtitle" style="margin-top: 8px;">
+            فتحت البوابة الرئيسية ونجوت من المدينة المظلمة سالماً.
+          </p>
+        </div>
+
+        <div class="stat-highlight" id="victory-time">01:23.4</div>
+        <p style="color: #94a3b8; font-size: 14px; margin-top: -12px;">الوقت القياسي للهروب</p>
+
+        <button class="btn-primary btn-success" id="btn-play-again">
+          <span>✨</span>
+          <span>العب مرة أخرى</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- PAUSE SCREEN MODAL -->
+    <div class="game-overlay hidden" id="pause-screen">
+      <div class="modal-container" style="max-width: 420px;">
+        <h2 class="game-title">اللعبة متوقفة مؤقتاً</h2>
+        <p class="game-subtitle">انقر على الزر للمتابعة واستئناف مؤشر الماوس</p>
+        <button class="btn-primary" id="btn-resume">
+          <span>▶️</span>
+          <span>استئناف اللعب</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Game Engine Script -->
+    <script type="module" src="./script.js"></script>
+  </body>
+</html>
